@@ -6,19 +6,20 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>グリッドコラージュ</title>
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="resources/icon.svg" type="image/svg+xml">
+<link rel="icon" href="resources/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="resources/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header class="top">
-  <svg class="logo" viewBox="0 0 352 352" aria-hidden="true">
-    <rect x="0" y="0" width="154" height="214" fill="currentColor"/>
-    <rect x="0" y="226" width="154" height="126" fill="currentColor" opacity=".3"/>
-    <rect x="166" y="0" width="186" height="122" fill="currentColor" opacity=".55"/>
-    <rect x="166" y="134" width="186" height="218" fill="currentColor"/>
+  <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+    <rect width="512" height="512" rx="112" fill="currentColor"/>
+    <rect x="100" y="100" width="133.17" height="185.04" rx="22" fill="var(--bg)"/>
+    <rect x="100" y="303.04" width="133.17" height="108.96" rx="22" fill="var(--bg)" opacity=".35"/>
+    <rect x="251.17" y="100" width="160.83" height="105.49" rx="22" fill="var(--bg)" opacity=".6"/>
+    <rect x="251.17" y="223.49" width="160.83" height="188.51" rx="22" fill="var(--bg)"/>
   </svg>
   <h1>グリッドコラージュ</h1>
 </header>
@@ -116,7 +117,13 @@
   </section>
 
   <section class="sec" aria-labelledby="h-board">
-    <h2 id="h-board">プレビュー</h2>
+    <div class="secHead">
+      <h2 id="h-board">プレビュー</h2>
+      <button type="button" id="shuffle" class="chip" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.2c1.5 0 2.9.8 3.7 2l4.2 6c.8 1.2 2.2 2 3.7 2H21"/><path d="M3 17h3.2c1.5 0 2.9-.8 3.7-2M14.1 9c.8-1.2 2.2-2 3.7-2H21"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg>
+        シャッフル
+      </button>
+    </div>
     <div class="board">
       <div id="gridWrap"><div id="grid"></div></div>
     </div>

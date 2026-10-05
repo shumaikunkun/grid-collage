@@ -16,7 +16,7 @@ const el = {
   modal: $('#modal'), result: $('#result'), resultInfo: $('#resultInfo'),
   save: $('#save'), download: $('#download'), close: $('#close'), modalHint: $('#modalHint'),
   editor: $('#editor'), frame: $('#frame'), frameImg: $('#frameImg'), zoom: $('#zoom'),
-  editReplace: $('#editReplace'), editReset: $('#editReset'), editDone: $('#editDone'),
+  shuffle: $('#shuffle'), editReplace: $('#editReplace'), editReset: $('#editReset'), editDone: $('#editDone'),
   pickLabel: $('#pickLabel'), meterFill: $('#meterFill'), outSize: $('#outSize'),
   orientField: $('#orientField'), oriPortraitRatio: $('#oriPortraitRatio'), oriLandscapeRatio: $('#oriLandscapeRatio'),
   dockCount: $('#dockCount'), dockTotal: $('#dockTotal'), zoomVal: $('#zoomVal'),
@@ -107,30 +107,86 @@ async function decodeImage(blob) {
   return { img, url };
 }
 
-let heicLib = null;
-function loadHeicLib() {
-  if (!heicLib) {
-    heicLib = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'vendor/heic2any.min.js';
-      s.onload = () => resolve(window.heic2any);
-      s.onerror = () => { heicLib = null; reject(new Error('HEIC変換ライブラリを読み込めませんでした')); };
-      document.head.appendChild(s);
-    });
+// Small pool of Web Workers. Idle workers are shut down after a moment to give the memory back.
+function createWorkerPool(url, size) {
+  let workers = [];
+  let idle = [];
+  const queue = [];
+  let timer = 0;
+
+  function terminate() {
+    clearTimeout(timer);
+    workers.forEach((w) => w.terminate());
+    workers = [];
+    idle = [];
   }
-  return heicLib;
+
+  function fail(worker, err) {
+    const job = worker.job;
+    worker.job = null;
+    worker.terminate();
+    workers = workers.filter((w) => w !== worker);
+    idle = idle.filter((w) => w !== worker);
+    if (job) job.reject(err);
+    pump();
+  }
+
+  function spawn() {
+    const worker = new Worker(url);
+    worker.job = null;
+    worker.onmessage = (e) => {
+      const job = worker.job;
+      worker.job = null;
+      idle.push(worker);
+      if (job) (e.data.error ? job.reject(new Error(e.data.error)) : job.resolve(e.data));
+      pump();
+    };
+    worker.onerror = () => fail(worker, new Error('worker failed'));
+    workers.push(worker);
+    return worker;
+  }
+
+  function pump() {
+    clearTimeout(timer);
+    while (queue.length) {
+      let worker = idle.pop();
+      if (!worker) {
+        if (workers.length >= size) return;
+        worker = spawn();
+      }
+      const job = queue.shift();
+      worker.job = job;
+      try {
+        worker.postMessage(job.message, job.transfer || []);
+      } catch (err) {
+        fail(worker, err);
+      }
+    }
+    if (workers.length > 0 && idle.length === workers.length) timer = setTimeout(terminate, 2000);
+  }
+
+  return {
+    run: (message, transfer) => new Promise((resolve, reject) => { queue.push({ message, transfer, resolve, reject }); pump(); }),
+    terminate,
+    count: () => workers.length,
+  };
 }
 
-async function openImage(file) {
-  try {
-    return await decodeImage(file);
-  } catch (e) {
-    if (!isHeic(file)) throw e;
-    const heic2any = await loadHeicLib();
-    let out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-    if (Array.isArray(out)) out = out[0];
-    return decodeImage(out);
-  }
+const cores = navigator.hardwareConcurrency || 4;
+const imagePool = createWorkerPool('image-worker.js', Math.min(3, Math.max(2, cores >> 1)));
+const heicPool = createWorkerPool('heic-worker.js', Math.min(3, Math.max(2, cores >> 1)));
+const IMPORT_CONCURRENCY = Math.min(3, Math.max(2, cores >> 1)) + 1;
+
+// HEIC that the browser cannot decode itself is decoded by libheif in the workers.
+async function heicConvert(file, maxEdge) {
+  const buffer = await file.arrayBuffer();
+  return heicPool.run({ buffer, maxEdge }, [buffer]);
+}
+
+// Shrunk JPEG of a photo made in a worker. Rejects where workers / OffscreenCanvas are not available.
+function workerImage(file, maxEdge, quality) {
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return Promise.reject(new Error('no worker support'));
+  return imagePool.run({ file, maxEdge, quality });
 }
 
 function scaleToBlob(img, w, h, maxEdge, quality) {
@@ -148,16 +204,83 @@ function scaleToBlob(img, w, h, maxEdge, quality) {
   });
 }
 
+// item.srcBlob is the 1600px working copy (used by the editor and the final render).
+// It is expensive, so for normal photos it is made lazily (see getSource / warmSources).
+function newItem(file, w, h, thumb, srcBlob = null) {
+  return { id: nextId++, name: file.name, file, w, h, srcBlob, srcPromise: null, thumbUrl: URL.createObjectURL(thumb), zoom: 1, fx: 0.5, fy: 0.5 };
+}
+
+async function importHeic(file) {
+  const r = await heicConvert(file, SRC_MAX);
+  const canvas = document.createElement('canvas');
+  canvas.width = r.outW;
+  canvas.height = r.outH;
+  canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(r.buffer), r.outW, r.outH), 0, 0);
+  // the pixels are already decoded here, so the working copy is cheap to keep
+  const srcBlob = await scaleToBlob(canvas, r.outW, r.outH, SRC_MAX, 0.92);
+  const thumb = await scaleToBlob(canvas, r.outW, r.outH, THUMB_MAX, 0.8);
+  return newItem(file, r.w, r.h, thumb, srcBlob);
+}
+
 async function importFile(file) {
-  const { img, url } = await openImage(file);
   try {
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    const srcBlob = await scaleToBlob(img, w, h, SRC_MAX, 0.92);
-    const thumb = await scaleToBlob(img, w, h, THUMB_MAX, 0.8);
-    return { id: nextId++, name: file.name, w, h, srcBlob, thumbUrl: URL.createObjectURL(thumb), zoom: 1, fx: 0.5, fy: 0.5 };
+    const r = await workerImage(file, THUMB_MAX, 0.8);
+    return newItem(file, r.w, r.h, r.blob);
+  } catch (e) { /* not decodable in a worker here: try the main thread */ }
+
+  let opened = null;
+  try {
+    opened = await decodeImage(file);
+  } catch (e) {
+    if (!isHeic(file)) throw e;
+  }
+  if (!opened) return importHeic(file);
+
+  try {
+    const w = opened.img.naturalWidth;
+    const h = opened.img.naturalHeight;
+    const thumb = await scaleToBlob(opened.img, w, h, THUMB_MAX, 0.8);
+    return newItem(file, w, h, thumb);
   } finally {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(opened.url);
+  }
+}
+
+function getSource(item) {
+  if (item.srcBlob) return Promise.resolve(item.srcBlob);
+  if (!item.srcPromise) {
+    item.srcPromise = (async () => {
+      try {
+        item.srcBlob = (await workerImage(item.file, SRC_MAX, 0.92)).blob;
+        return item.srcBlob;
+      } catch (e) { /* fall back to the main thread */ }
+      const { img, url } = await decodeImage(item.file);
+      try {
+        item.srcBlob = await scaleToBlob(img, img.naturalWidth, img.naturalHeight, SRC_MAX, 0.92);
+        return item.srcBlob;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    })();
+  }
+  return item.srcPromise;
+}
+
+// Prepares the working copies in the background while the user arranges the photos.
+let warming = false;
+async function warmSources() {
+  if (warming) return;
+  warming = true;
+  try {
+    for (;;) {
+      const pending = state.items.filter((it) => it && !it.srcBlob && !it.srcPromise);
+      if (pending.length === 0) break;
+      while (drag || editorOpen() || state.busy) await new Promise((r) => setTimeout(r, 150));
+      await Promise.all(pending.slice(0, 2).map((it) => getSource(it).catch(() => {})));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } finally {
+    warming = false;
   }
 }
 
@@ -170,16 +293,25 @@ async function addFiles(files) {
   const failed = [];
 
   setBusy(true);
-  for (let k = 0; k < use.length; k++) {
-    setNote(`読み込み中… ${k + 1} / ${use.length}`);
-    try {
-      state.items[empties[k]] = await importFile(use[k]);
-    } catch (e) {
-      failed.push(use[k].name);
+  let next = 0;
+  let done = 0;
+  setNote(`読み込み中… 0 / ${use.length}`);
+  const lane = async () => {
+    while (next < use.length) {
+      const k = next++;
+      try {
+        state.items[empties[k]] = await importFile(use[k]);
+      } catch (e) {
+        failed.push(use[k].name);
+      }
+      done++;
+      setNote(`読み込み中… ${done} / ${use.length}`);
+      renderGrid();
     }
-    renderGrid();
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, use.length) }, lane));
   setBusy(false);
+  warmSources();
 
   const msgs = [];
   if (skipped > 0) msgs.push(`枠を超えた ${skipped} 枚は追加されませんでした。`);
@@ -204,6 +336,7 @@ async function replaceImage(file) {
     setNote(`読み込めなかった画像: ${file.name}`, true);
   }
   setBusy(false);
+  warmSources();
   renderGrid();
   if (editorOpen() && editor.index === i) showEditorImage();
 }
@@ -267,6 +400,7 @@ function updateStatus() {
   el.clear.disabled = state.busy || !state.items.some(Boolean);
   el.build.disabled = state.busy || filled.length === 0;
   el.editReplace.disabled = state.busy;
+  el.shuffle.disabled = state.busy || filled.length < 2;
 
   const [cu, cv] = cellUnits();
   const dir = cu < cv ? '横向き' : '縦向き';
@@ -288,6 +422,28 @@ function setBusy(flag) {
 
 function swapItems(a, b) {
   [state.items[a], state.items[b]] = [state.items[b], state.items[a]];
+}
+
+// Random new order for the photos that are placed; empty cells stay where they are.
+function shuffleItems() {
+  const slots = [];
+  for (let i = 0; i < cellCount(); i++) if (state.items[i]) slots.push(i);
+  if (slots.length < 2) return;
+
+  const before = slots.map((i) => state.items[i]);
+  let after = before;
+  for (let attempt = 0; attempt < 20 && after.every((it, k) => it === before[k]); attempt++) {
+    after = before.slice();
+    for (let k = after.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [after[k], after[j]] = [after[j], after[k]];
+    }
+  }
+  slots.forEach((slot, k) => { state.items[slot] = after[k]; });
+  renderGrid();
+  el.grid.classList.remove('shuffled');
+  void el.grid.offsetWidth;
+  el.grid.classList.add('shuffled');
 }
 
 function clearAll() {
@@ -421,10 +577,17 @@ async function showEditorImage() {
   const item = editorItem();
   if (!item) { closeEditor(); return; }
   if (editor.url) URL.revokeObjectURL(editor.url);
-  editor.url = URL.createObjectURL(item.srcBlob);
-  el.frameImg.src = editor.url;
+  editor.url = null;
+  el.frameImg.src = item.thumbUrl;
   paintEditor();
-  try { await el.frameImg.decode(); } catch (e) { /* shown once loaded */ }
+  try {
+    const blob = await getSource(item);
+    if (editorItem() !== item) return;
+    editor.url = URL.createObjectURL(blob);
+    el.frameImg.src = editor.url;
+    await el.frameImg.decode();
+  } catch (e) { /* the thumbnail stays */ }
+  paintEditor();
 }
 
 function paintEditor() {
@@ -569,7 +732,7 @@ async function buildCollage() {
     const item = state.items[i];
     if (!item) continue;
     setNote(`作成中… ${i + 1} / ${total}`);
-    const { img, url } = await decodeImage(item.srcBlob);
+    const { img, url } = await decodeImage(await getSource(item));
     try {
       const g = cropGeom({ w: img.naturalWidth, h: img.naturalHeight, zoom: item.zoom, fx: item.fx, fy: item.fy }, cw, ch);
       ctx.drawImage(img, g.sx, g.sy, g.sw, g.sh, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch);
@@ -672,6 +835,7 @@ document.querySelectorAll('.step').forEach((btn) => {
 
 el.pick.addEventListener('click', () => el.file.click());
 el.clear.addEventListener('click', clearAll);
+el.shuffle.addEventListener('click', shuffleItems);
 el.file.addEventListener('change', () => {
   const files = Array.from(el.file.files);
   el.file.value = '';
