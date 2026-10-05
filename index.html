@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>グリッドコラージュ</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <svg class="logo" viewBox="0 0 352 352" aria-hidden="true">
+    <rect x="0" y="0" width="154" height="214" fill="currentColor"/>
+    <rect x="0" y="226" width="154" height="126" fill="currentColor" opacity=".3"/>
+    <rect x="166" y="0" width="186" height="122" fill="currentColor" opacity=".55"/>
+    <rect x="166" y="134" width="186" height="218" fill="currentColor"/>
+  </svg>
+  <h1>グリッドコラージュ</h1>
+</header>
+
+<main>
+  <section class="sec" aria-labelledby="h-layout">
+    <h2 id="h-layout">レイアウト</h2>
+
+    <div class="field">
+      <span class="label">画像の比率</span>
+      <div class="seg" role="radiogroup" aria-label="画像の比率">
+        <label>
+          <input type="radio" name="ratio" value="3:4" checked>
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="1.5"/></svg>
+            3:4
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="ratio" value="1:1">
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
+            1:1
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="ratio" value="9:16">
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="3" width="9" height="18" rx="1.5"/></svg>
+            9:16
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field" id="orientField">
+      <span class="label">向き</span>
+      <div class="seg" role="radiogroup" aria-label="画像の向き">
+        <label>
+          <input type="radio" name="orientation" value="landscape" checked>
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1.5"/></svg>
+            横 <small id="oriLandscapeRatio">4:3</small>
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="orientation" value="portrait">
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="1.5"/></svg>
+            縦 <small id="oriPortraitRatio">3:4</small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="steppers">
+      <div class="stepper">
+        <span class="label" id="rowsLabel">縦に並べる枚数</span>
+        <div class="stepctl">
+          <button type="button" class="step" data-target="rows" data-delta="-1" aria-label="縦の枚数を減らす"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+          <select id="rows" aria-labelledby="rowsLabel"></select>
+          <button type="button" class="step" data-target="rows" data-delta="1" aria-label="縦の枚数を増やす"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+        </div>
+      </div>
+      <div class="stepper">
+        <span class="label" id="colsLabel">横に並べる枚数</span>
+        <div class="stepctl">
+          <button type="button" class="step" data-target="cols" data-delta="-1" aria-label="横の枚数を減らす"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+          <select id="cols" aria-labelledby="colsLabel"></select>
+          <button type="button" class="step" data-target="cols" data-delta="1" aria-label="横の枚数を増やす"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <p class="total">合計 <strong id="total">9</strong> 枚<span class="dot">·</span>出力 <span id="outSize" class="num"></span></p>
+  </section>
+
+  <section class="sec" aria-labelledby="h-photos">
+    <h2 id="h-photos">写真</h2>
+    <div class="actions">
+      <button type="button" id="pick" class="btn solid grow">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h7M20 11v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7"/><path d="m4 17 4.5-4.5 3.5 3.5 2.5-2.5L20 18"/><path d="M18 3v6M15 6h6"/></svg>
+        <span id="pickLabel">画像を選ぶ</span>
+      </button>
+      <button type="button" id="clear" class="btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>
+        クリア
+      </button>
+    </div>
+    <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+    <input type="file" id="fileOne" accept="image/*,.heic,.heif" hidden>
+    <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
+    <p id="status" class="status" aria-live="polite"></p>
+    <p id="warn" class="callout" aria-live="polite"></p>
+    <p id="note" class="note" aria-live="polite"></p>
+  </section>
+
+  <section class="sec" aria-labelledby="h-board">
+    <h2 id="h-board">プレビュー</h2>
+    <div class="board">
+      <div id="gridWrap"><div id="grid"></div></div>
+    </div>
+    <p class="tips">タップで位置・大きさの調整と差し替え。ドラッグで入れ替え。空の枠をタップすると、その枠に追加できます。</p>
+  </section>
+</main>
+
+<div class="dock">
+  <div class="dockInfo">
+    <span class="dockNum"><b id="dockCount">0</b><span id="dockTotal">/ 9</span></span>
+    <span class="dockLabel">枚 選択中</span>
+  </div>
+  <button type="button" id="build" class="btn cta" disabled>画像を作成</button>
+</div>
+
+<div id="editor" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="位置と大きさを調整">
+    <p class="sheetTitle">位置と大きさを調整</p>
+    <div id="frame" class="frame"><img id="frameImg" alt="" draggable="false"></div>
+    <div class="zoomRow">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>
+      <input type="range" id="zoom" min="1" max="6" step="0.01" value="1" aria-label="拡大率">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>
+      <span id="zoomVal" class="num">1.0×</span>
+    </div>
+    <p class="hint">ドラッグで移動、2本指のピンチまたはスライダーで拡大・縮小できます。</p>
+    <div class="actions two">
+      <button type="button" id="editReplace" class="btn">画像を差し替え</button>
+      <button type="button" id="editReset" class="btn">リセット</button>
+    </div>
+    <button type="button" id="editDone" class="btn cta wide">完了</button>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="できあがり">
+    <p class="sheetTitle">できあがり</p>
+    <div class="print"><img id="result" alt="作成したコラージュ"></div>
+    <p id="resultInfo" class="status center num"></p>
+    <button type="button" id="save" class="btn cta wide">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+      カメラロールに保存
+    </button>
+    <div class="actions two">
+      <a id="download" class="btn" download="grid_collage.jpg">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>
+        ダウンロード
+      </a>
+      <button type="button" id="close" class="btn">閉じる</button>
+    </div>
+    <p id="modalHint" class="hint"></p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
