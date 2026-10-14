@@ -5,6 +5,9 @@ const MAX_AREA = 16000000;
 const SRC_MAX = 1600;
 const THUMB_MAX = 480;
 const DRAG_THRESHOLD = 8;
+const OVERLAY_RATIO = 0.075;   // overlay caption size relative to the picture height
+const CAP_RATIO = 0.2;   // caption bar height relative to the picture height
+const CAP_FONT = '"Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif';
 const MAX_ZOOM = 6;
 
 const $ = (sel) => document.querySelector(sel);
@@ -16,14 +19,15 @@ const el = {
   modal: $('#modal'), result: $('#result'), resultInfo: $('#resultInfo'),
   save: $('#save'), download: $('#download'), close: $('#close'), modalHint: $('#modalHint'),
   editor: $('#editor'), frame: $('#frame'), frameImg: $('#frameImg'), zoom: $('#zoom'),
-  editReplace: $('#editReplace'), editReset: $('#editReset'), editDone: $('#editDone'),
+  shuffle: $('#shuffle'), editReplace: $('#editReplace'), editReset: $('#editReset'), editClear: $('#editClear'), editDone: $('#editDone'),
   pickLabel: $('#pickLabel'), meterFill: $('#meterFill'), outSize: $('#outSize'),
+  capSheet: $('#capSheet'), capInput: $('#capInput'), capClear: $('#capClear'), capDone: $('#capDone'), capNext: $('#capNext'), capThumb: $('#capThumb'), capPos: $('#capPos'),
   orientField: $('#orientField'), oriPortraitRatio: $('#oriPortraitRatio'), oriLandscapeRatio: $('#oriLandscapeRatio'),
   dockCount: $('#dockCount'), dockTotal: $('#dockTotal'), zoomVal: $('#zoomVal'),
 };
 
 const RATIOS = { '3:4': [3, 4], '1:1': [1, 1], '9:16': [9, 16] };
-const state = { ratio: '3:4', orientation: 'landscape', rows: 3, cols: 3, items: [], busy: false };
+const state = { ratio: '3:4', orientation: 'landscape', rows: 3, cols: 3, items: [], busy: false, captions: false, capTheme: 'black', capOverlay: false };
 let nextId = 1;
 let targetIndex = null;
 let resultUrl = null;
@@ -107,30 +111,86 @@ async function decodeImage(blob) {
   return { img, url };
 }
 
-let heicLib = null;
-function loadHeicLib() {
-  if (!heicLib) {
-    heicLib = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'vendor/heic2any.min.js';
-      s.onload = () => resolve(window.heic2any);
-      s.onerror = () => { heicLib = null; reject(new Error('HEIC変換ライブラリを読み込めませんでした')); };
-      document.head.appendChild(s);
-    });
+// Small pool of Web Workers. Idle workers are shut down after a moment to give the memory back.
+function createWorkerPool(url, size) {
+  let workers = [];
+  let idle = [];
+  const queue = [];
+  let timer = 0;
+
+  function terminate() {
+    clearTimeout(timer);
+    workers.forEach((w) => w.terminate());
+    workers = [];
+    idle = [];
   }
-  return heicLib;
+
+  function fail(worker, err) {
+    const job = worker.job;
+    worker.job = null;
+    worker.terminate();
+    workers = workers.filter((w) => w !== worker);
+    idle = idle.filter((w) => w !== worker);
+    if (job) job.reject(err);
+    pump();
+  }
+
+  function spawn() {
+    const worker = new Worker(url);
+    worker.job = null;
+    worker.onmessage = (e) => {
+      const job = worker.job;
+      worker.job = null;
+      idle.push(worker);
+      if (job) (e.data.error ? job.reject(new Error(e.data.error)) : job.resolve(e.data));
+      pump();
+    };
+    worker.onerror = () => fail(worker, new Error('worker failed'));
+    workers.push(worker);
+    return worker;
+  }
+
+  function pump() {
+    clearTimeout(timer);
+    while (queue.length) {
+      let worker = idle.pop();
+      if (!worker) {
+        if (workers.length >= size) return;
+        worker = spawn();
+      }
+      const job = queue.shift();
+      worker.job = job;
+      try {
+        worker.postMessage(job.message, job.transfer || []);
+      } catch (err) {
+        fail(worker, err);
+      }
+    }
+    if (workers.length > 0 && idle.length === workers.length) timer = setTimeout(terminate, 2000);
+  }
+
+  return {
+    run: (message, transfer) => new Promise((resolve, reject) => { queue.push({ message, transfer, resolve, reject }); pump(); }),
+    terminate,
+    count: () => workers.length,
+  };
 }
 
-async function openImage(file) {
-  try {
-    return await decodeImage(file);
-  } catch (e) {
-    if (!isHeic(file)) throw e;
-    const heic2any = await loadHeicLib();
-    let out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-    if (Array.isArray(out)) out = out[0];
-    return decodeImage(out);
-  }
+const cores = navigator.hardwareConcurrency || 4;
+const imagePool = createWorkerPool('image-worker.js', Math.min(3, Math.max(2, cores >> 1)));
+const heicPool = createWorkerPool('heic-worker.js', Math.min(3, Math.max(2, cores >> 1)));
+const IMPORT_CONCURRENCY = Math.min(3, Math.max(2, cores >> 1)) + 1;
+
+// HEIC that the browser cannot decode itself is decoded by libheif in the workers.
+async function heicConvert(file, maxEdge) {
+  const buffer = await file.arrayBuffer();
+  return heicPool.run({ buffer, maxEdge }, [buffer]);
+}
+
+// Shrunk JPEG of a photo made in a worker. Rejects where workers / OffscreenCanvas are not available.
+function workerImage(file, maxEdge, quality) {
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return Promise.reject(new Error('no worker support'));
+  return imagePool.run({ file, maxEdge, quality });
 }
 
 function scaleToBlob(img, w, h, maxEdge, quality) {
@@ -148,40 +208,138 @@ function scaleToBlob(img, w, h, maxEdge, quality) {
   });
 }
 
+// item.srcBlob is the 1600px working copy (used by the editor and the final render).
+// It is expensive, so for normal photos it is made lazily (see getSource / warmSources).
+function newItem(file, w, h, thumb, srcBlob = null) {
+  return { id: nextId++, name: file.name, file, w, h, caption: '', srcBlob, srcPromise: null, thumbUrl: URL.createObjectURL(thumb), zoom: 1, fx: 0.5, fy: 0.5 };
+}
+
+async function importHeic(file) {
+  const r = await heicConvert(file, SRC_MAX);
+  const canvas = document.createElement('canvas');
+  canvas.width = r.outW;
+  canvas.height = r.outH;
+  canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(r.buffer), r.outW, r.outH), 0, 0);
+  // the pixels are already decoded here, so the working copy is cheap to keep
+  const srcBlob = await scaleToBlob(canvas, r.outW, r.outH, SRC_MAX, 0.92);
+  const thumb = await scaleToBlob(canvas, r.outW, r.outH, THUMB_MAX, 0.8);
+  return newItem(file, r.w, r.h, thumb, srcBlob);
+}
+
 async function importFile(file) {
-  const { img, url } = await openImage(file);
   try {
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    const srcBlob = await scaleToBlob(img, w, h, SRC_MAX, 0.92);
-    const thumb = await scaleToBlob(img, w, h, THUMB_MAX, 0.8);
-    return { id: nextId++, name: file.name, w, h, srcBlob, thumbUrl: URL.createObjectURL(thumb), zoom: 1, fx: 0.5, fy: 0.5 };
+    const r = await workerImage(file, THUMB_MAX, 0.8);
+    return newItem(file, r.w, r.h, r.blob);
+  } catch (e) { /* not decodable in a worker here: try the main thread */ }
+
+  let opened = null;
+  try {
+    opened = await decodeImage(file);
+  } catch (e) {
+    if (!isHeic(file)) throw e;
+  }
+  if (!opened) return importHeic(file);
+
+  try {
+    const w = opened.img.naturalWidth;
+    const h = opened.img.naturalHeight;
+    const thumb = await scaleToBlob(opened.img, w, h, THUMB_MAX, 0.8);
+    return newItem(file, w, h, thumb);
   } finally {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(opened.url);
   }
 }
 
-async function addFiles(files) {
-  const empties = [];
-  for (let i = 0; i < cellCount(); i++) if (!state.items[i]) empties.push(i);
+function getSource(item) {
+  if (item.srcBlob) return Promise.resolve(item.srcBlob);
+  if (!item.srcPromise) {
+    item.srcPromise = (async () => {
+      try {
+        item.srcBlob = (await workerImage(item.file, SRC_MAX, 0.92)).blob;
+        return item.srcBlob;
+      } catch (e) { /* fall back to the main thread */ }
+      const { img, url } = await decodeImage(item.file);
+      try {
+        item.srcBlob = await scaleToBlob(img, img.naturalWidth, img.naturalHeight, SRC_MAX, 0.92);
+        return item.srcBlob;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    })();
+  }
+  return item.srcPromise;
+}
+
+// Prepares the working copies in the background while the user arranges the photos.
+let warming = false;
+async function warmSources() {
+  if (warming) return;
+  warming = true;
+  try {
+    for (;;) {
+      const pending = state.items.filter((it) => it && !it.srcBlob && !it.srcPromise);
+      if (pending.length === 0) break;
+      while (drag || editorOpen() || state.busy) await new Promise((r) => setTimeout(r, 150));
+      await Promise.all(pending.slice(0, 2).map((it) => getSource(it).catch(() => {})));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } finally {
+    warming = false;
+  }
+}
+
+// Empty cells in the order they get filled: from `start` to the end, then round to the earlier ones.
+function emptyCellsFrom(start) {
+  const n = cellCount();
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const i = (start + k) % n;
+    if (!state.items[i]) out.push(i);
+  }
+  return out;
+}
+
+let addStart = 0;   // first cell to fill: the tapped "+", or 0 for the 画像を追加 button
+
+async function addFiles(files, start = 0) {
+  const empties = emptyCellsFrom(start);
   if (empties.length === 0 || files.length === 0) return;
   const use = files.slice(0, empties.length);
   const skipped = files.length - use.length;
   const failed = [];
+  const startedAt = performance.now();
 
   setBusy(true);
-  for (let k = 0; k < use.length; k++) {
-    setNote(`読み込み中… ${k + 1} / ${use.length}`);
-    try {
-      state.items[empties[k]] = await importFile(use[k]);
-    } catch (e) {
-      failed.push(use[k].name);
+  let next = 0;
+  let done = 0;
+  setNote(`読み込み中… 0 / ${use.length}`);
+  const lane = async () => {
+    while (next < use.length) {
+      const k = next++;
+      try {
+        state.items[empties[k]] = await importFile(use[k]);
+      } catch (e) {
+        failed.push(use[k].name);
+      }
+      done++;
+      setNote(`読み込み中… ${done} / ${use.length}`);
+      renderGrid();
     }
-    renderGrid();
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, use.length) }, lane));
   setBusy(false);
+  warmSources();
 
   const msgs = [];
+  if (use.length >= 3) {
+    const kinds = {};
+    use.forEach((f) => {
+      const k = isHeic(f) ? 'HEIC' : /jpe?g/i.test(f.type) || /\.jpe?g$/i.test(f.name) ? 'JPEG' : /png/i.test(f.type) || /\.png$/i.test(f.name) ? 'PNG' : 'その他';
+      kinds[k] = (kinds[k] || 0) + 1;
+    });
+    const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+    msgs.push(`${use.length - failed.length}枚を${seconds}秒で取り込みました（受け取った形式: ${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join('・')}）`);
+  }
   if (skipped > 0) msgs.push(`枠を超えた ${skipped} 枚は追加されませんでした。`);
   if (failed.length) msgs.push(`読み込めなかった画像: ${failed.join(', ')}`);
   setNote(msgs.join('\n'), failed.length > 0);
@@ -204,6 +362,7 @@ async function replaceImage(file) {
     setNote(`読み込めなかった画像: ${file.name}`, true);
   }
   setBusy(false);
+  warmSources();
   renderGrid();
   if (editorOpen() && editor.index === i) showEditorImage();
 }
@@ -217,17 +376,23 @@ function layoutGrid() {
   cellPx.w = Math.max(8, Math.min(Math.floor(el.gridWrap.clientWidth / cols), cap));
   cellPx.h = Math.round(cellPx.w * uh / uw);
   el.grid.style.gridTemplateColumns = `repeat(${cols}, ${cellPx.w}px)`;
-  el.grid.style.gridAutoRows = `${cellPx.h}px`;
+  el.grid.style.gridAutoRows = `${cellPx.h + capHeight()}px`;
 }
+
+const capHeight = () => (state.captions ? Math.round(cellPx.h * CAP_RATIO) : 0);
 
 function renderGrid() {
   layoutGrid();
+  const capH = capHeight();
   const frag = document.createDocumentFragment();
   for (let i = 0; i < cellCount(); i++) {
     const item = state.items[i];
     const cell = document.createElement('div');
     cell.dataset.i = i;
     cell.className = 'cell';
+    const pic = document.createElement('div');
+    pic.className = 'pic';
+    pic.style.height = `${cellPx.h}px`;
     if (!item) {
       cell.classList.add('empty');
     } else {
@@ -237,7 +402,32 @@ function renderGrid() {
       img.alt = '';
       img.draggable = false;
       applyCrop(img, item, cellPx.w, cellPx.h);
-      cell.appendChild(img);
+      pic.appendChild(img);
+      if (state.capOverlay) {
+        const tag = document.createElement('div');
+        tag.className = 'tag' + (state.capOverlay === 'tr' ? ' top' : '') + (item.caption ? '' : ' hint-empty');
+        tag.textContent = item.caption || '文字';
+        tag.style.fontFamily = CAP_FONT;
+        const base = Math.max(5, cellPx.h * OVERLAY_RATIO);
+        tag.style.fontSize = `${item.caption ? fitCaptionSize(item.caption, cellPx.w * 0.92, base, 2) : base}px`;
+        pic.appendChild(tag);
+      }
+    }
+    cell.appendChild(pic);
+    if (capH > 0) {
+      const cap = document.createElement('div');
+      cap.className = state.capTheme === 'white' ? 'cap white' : 'cap';
+      cap.style.height = `${capH}px`;
+      cap.style.fontFamily = CAP_FONT;
+      const base = Math.max(6, Math.min(14, capH * 0.5));
+      cap.style.fontSize = `${item && item.caption ? fitCaptionSize(item.caption, cellPx.w - 8, base, 2) : base}px`;
+      if (item && item.caption) {
+        cap.textContent = item.caption;
+      } else if (item) {
+        cap.textContent = '文字';
+        cap.classList.add('hint-empty');
+      }
+      cell.appendChild(cap);
     }
     frag.appendChild(cell);
   }
@@ -250,9 +440,9 @@ function updateStatus() {
   const filled = filledItems();
   const mismatches = filled.filter(isMismatch).length;
 
-  const { cw, ch } = computeCellSize();
+  const { cw, ch, cap } = computeCellSize();
   el.total.textContent = n;
-  el.outSize.textContent = `${cw * state.cols}×${ch * state.rows}px`;
+  el.outSize.textContent = `${cw * state.cols}×${(ch + cap) * state.rows}px`;
   el.status.textContent = `${filled.length} / ${n} 枚を選択中` + (filled.length > 0 && filled.length < n ? '（空の枠は白で保存されます）' : '');
   el.pickLabel.textContent = filled.length === 0 ? '画像を選ぶ' : '画像を追加';
   el.pick.classList.toggle('solid', filled.length === 0);
@@ -267,6 +457,8 @@ function updateStatus() {
   el.clear.disabled = state.busy || !state.items.some(Boolean);
   el.build.disabled = state.busy || filled.length === 0;
   el.editReplace.disabled = state.busy;
+  el.editClear.disabled = state.busy;
+  el.shuffle.disabled = state.busy || filled.length < 2;
 
   const [cu, cv] = cellUnits();
   const dir = cu < cv ? '横向き' : '縦向き';
@@ -288,6 +480,28 @@ function setBusy(flag) {
 
 function swapItems(a, b) {
   [state.items[a], state.items[b]] = [state.items[b], state.items[a]];
+}
+
+// Random new order for the photos that are placed; empty cells stay where they are.
+function shuffleItems() {
+  const slots = [];
+  for (let i = 0; i < cellCount(); i++) if (state.items[i]) slots.push(i);
+  if (slots.length < 2) return;
+
+  const before = slots.map((i) => state.items[i]);
+  let after = before;
+  for (let attempt = 0; attempt < 20 && after.every((it, k) => it === before[k]); attempt++) {
+    after = before.slice();
+    for (let k = after.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [after[k], after[j]] = [after[j], after[k]];
+    }
+  }
+  slots.forEach((slot, k) => { state.items[slot] = after[k]; });
+  renderGrid();
+  el.grid.classList.remove('shuffled');
+  void el.grid.offsetWidth;
+  el.grid.classList.add('shuffled');
 }
 
 function clearAll() {
@@ -312,14 +526,16 @@ function onPointerDown(e) {
   if (state.busy || (e.pointerType === 'mouse' && e.button !== 0)) return;
   const cell = e.target.closest('.cell');
   if (!cell || drag) return;
-  drag = { id: e.pointerId, from: Number(cell.dataset.i), x: e.clientX, y: e.clientY, active: false, ghost: null, over: null, cell };
+  // touch: stop the follow-up mouse events, otherwise they land on a freshly opened sheet and steal the input focus
+  if (e.pointerType !== 'mouse') e.preventDefault();
+  drag = { id: e.pointerId, from: Number(cell.dataset.i), x: e.clientX, y: e.clientY, active: false, ghost: null, over: null, cell, onCap: !!e.target.closest('.cap, .tag') };
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerCancel);
 }
 
 function startDrag() {
-  const rect = drag.cell.getBoundingClientRect();
+  const rect = drag.cell.querySelector('.pic').getBoundingClientRect();
   const ghost = document.createElement('div');
   ghost.className = 'ghost';
   ghost.style.width = `${rect.width}px`;
@@ -368,7 +584,7 @@ function endDrag() {
 
 function onPointerUp(e) {
   if (!drag || e.pointerId !== drag.id) return;
-  const { active, from, over } = drag;
+  const { active, from, over, onCap } = drag;
   endDrag();
 
   if (active) {
@@ -378,10 +594,11 @@ function onPointerUp(e) {
   }
 
   if (state.items[from]) {
-    openEditor(from);
+    if (onCap && (state.captions || state.capOverlay)) openCaptionSheet(from);
+    else openEditor(from);
   } else {
-    targetIndex = from;
-    el.fileOne.click();
+    addStart = from;
+    el.file.click();
   }
 }
 
@@ -391,12 +608,112 @@ function onPointerCancel(e) {
   renderGrid();
 }
 
+/* ---------- caption sheet ---------- */
+
+let capIndex = null;
+let sheetOpenedAt = 0;
+const backdropReady = () => performance.now() - sheetOpenedAt > 450;
+const captionOpen = () => !el.capSheet.hidden;
+
+const nextFilledIndex = (from) => {
+  for (let i = from + 1; i < cellCount(); i++) if (state.items[i]) return i;
+  return -1;
+};
+
+// Shows the caption of one photo in the (already open or about to open) sheet.
+function showCaptionFor(index) {
+  capIndex = index;
+  const item = state.items[index];
+  el.capInput.value = item.caption || '';
+  el.capPos.textContent = `${index + 1} / ${cellCount()}`;
+  const hasNext = nextFilledIndex(index) !== -1;
+  el.capNext.disabled = !hasNext;
+  el.capInput.enterKeyHint = hasNext ? 'next' : 'done';
+
+  const [uw, uh] = cellUnits();
+  const tw = 56;
+  const th = Math.round((tw * uh) / uw);
+  const img = new Image();
+  img.src = item.thumbUrl;
+  img.alt = '';
+  applyCrop(img, item, tw, th);
+  el.capThumb.style.width = `${tw}px`;
+  el.capThumb.style.height = `${th}px`;
+  el.capThumb.replaceChildren(img);
+}
+
+function openCaptionSheet(index) {
+  sheetOpenedAt = performance.now();
+  el.capSheet.classList.toggle('cap-white', state.captions && state.capTheme === 'white');
+  showCaptionFor(index);
+  el.capSheet.hidden = false;
+  el.capInput.focus();
+}
+
+function closeCaptionSheet() {
+  el.capSheet.hidden = true;
+  capIndex = null;
+  renderGrid();
+}
+
+el.capInput.addEventListener('input', () => {
+  const item = capIndex === null ? null : state.items[capIndex];
+  if (item) item.caption = el.capInput.value;
+});
+// Enter confirms an IME conversion (Japanese, etc.) - only a plain Enter after that acts as 次へ (or 完了 on the last photo).
+// Safari reports compositionend *before* the keydown of that Enter, so also ignore a very recent end of composition.
+let composing = false;
+let composeEndedAt = 0;
+el.capInput.addEventListener('compositionstart', () => { composing = true; });
+el.capInput.addEventListener('compositionend', () => { composing = false; composeEndedAt = performance.now(); });
+el.capInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.isComposing || composing || e.keyCode === 229 || performance.now() - composeEndedAt < 200) return;
+  e.preventDefault();
+  if (!goNextCaption()) closeCaptionSheet();
+});
+el.capClear.addEventListener('click', () => {
+  const item = capIndex === null ? null : state.items[capIndex];
+  if (item) item.caption = '';
+  el.capInput.value = '';
+  el.capInput.focus();
+});
+function goNextCaption() {
+  const next = capIndex === null ? -1 : nextFilledIndex(capIndex);
+  if (next === -1) return false;
+  showCaptionFor(next);
+  el.capInput.focus();
+  return true;
+}
+el.capNext.addEventListener('click', goNextCaption);
+// keep the keyboard open when a button is pressed (pressing a button would blur the input)
+[el.capClear, el.capNext, el.capDone].forEach((btn) => btn.addEventListener('pointerdown', (e) => e.preventDefault()));
+el.capDone.addEventListener('click', closeCaptionSheet);
+
+// lift the sheet above the on-screen keyboard (iOS keeps fixed elements behind it)
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const lift = () => el.capSheet.style.setProperty('--kb', `${Math.max(0, window.innerHeight - vv.height - vv.offsetTop)}px`);
+  vv.addEventListener('resize', lift);
+  vv.addEventListener('scroll', lift);
+}
+el.capSheet.addEventListener('click', (e) => { if (e.target === el.capSheet && backdropReady()) closeCaptionSheet(); });
+document.querySelectorAll('input[name="caption"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    state.captions = radio.value === 'black' || radio.value === 'white';   // a bar under the picture
+    state.capOverlay = radio.value === 'br' || radio.value === 'tr' ? radio.value : false;   // small text over the picture: 'br' bottom-right / 'tr' top-right
+    if (state.captions) state.capTheme = radio.value;
+    renderGrid();
+  });
+});
+
 /* ---------- crop editor ---------- */
 
 const editorOpen = () => !el.editor.hidden;
 const editorItem = () => (editor.index === null ? null : state.items[editor.index]);
 
 function openEditor(index) {
+  sheetOpenedAt = performance.now();
   editor.index = index;
   el.editor.hidden = false;
   layoutEditor();
@@ -421,10 +738,17 @@ async function showEditorImage() {
   const item = editorItem();
   if (!item) { closeEditor(); return; }
   if (editor.url) URL.revokeObjectURL(editor.url);
-  editor.url = URL.createObjectURL(item.srcBlob);
-  el.frameImg.src = editor.url;
+  editor.url = null;
+  el.frameImg.src = item.thumbUrl;
   paintEditor();
-  try { await el.frameImg.decode(); } catch (e) { /* shown once loaded */ }
+  try {
+    const blob = await getSource(item);
+    if (editorItem() !== item) return;
+    editor.url = URL.createObjectURL(blob);
+    el.frameImg.src = editor.url;
+    await el.frameImg.decode();
+  } catch (e) { /* the thumbnail stays */ }
+  paintEditor();
 }
 
 function paintEditor() {
@@ -533,46 +857,120 @@ el.editReplace.addEventListener('click', () => {
   targetIndex = editor.index;
   el.fileOne.click();
 });
+el.editClear.addEventListener('click', () => {
+  const item = editorItem();
+  if (!item) return;
+  state.items[editor.index] = null;
+  closeEditor();
+  URL.revokeObjectURL(item.thumbUrl);
+});
 el.editDone.addEventListener('click', closeEditor);
-el.editor.addEventListener('click', (e) => { if (e.target === el.editor) closeEditor(); });
+el.editor.addEventListener('click', (e) => { if (e.target === el.editor && backdropReady()) closeEditor(); });
 
 /* ---------- collage output ---------- */
 
 function computeCellSize() {
   const [uw, uh] = cellUnits();
   const { rows, cols } = state;
+  const f = state.captions ? 1 + CAP_RATIO : 1;    // every cell is taller when it carries a caption bar
   const u = Math.max(1, Math.min(
     Math.floor(MAX_SIDE / (uw * cols)),
-    Math.floor(MAX_SIDE / (uh * rows)),
-    Math.floor(Math.sqrt(MAX_AREA / (uw * uh * rows * cols))),
+    Math.floor(MAX_SIDE / (uh * f * rows)),
+    Math.floor(Math.sqrt(MAX_AREA / (uw * uh * f * rows * cols))),
     Math.floor(SRC_MAX / Math.max(uw, uh)),
   ));
-  return { cw: uw * u, ch: uh * u };
+  const ch = uh * u;
+  return { cw: uw * u, ch, cap: state.captions ? Math.round(ch * CAP_RATIO) : 0 };
 }
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 
+// Largest font size (at most `base`, at least `min`) at which `text` fits into `maxW`.
+// The width is measured once at 100px and scaled, so long Japanese text (one em per character) shrinks as far as needed.
+const measureCtx = document.createElement('canvas').getContext('2d');
+function fitCaptionSize(text, maxW, base, min) {
+  measureCtx.font = `600 100px ${CAP_FONT}`;
+  const perPx = measureCtx.measureText(text).width / 100;
+  return Math.max(min, Math.min(base, maxW / perPx));
+}
+
+// Picks the font size and the text to draw so that it fits `maxW`.
+// Canvas text measurement is not perfectly linear in the font size (e.g. on iOS Safari small sizes come out slightly wider),
+// so the first guess is checked against the real measurement at the real size and refined; the text is only cut
+// when it is far too long even at the smallest size.
+function layoutCaption(ctx, text, maxW, base, min) {
+  let size = fitCaptionSize(text, maxW * 0.98, base, min);
+  for (let i = 0; i < 8; i++) {
+    ctx.font = `600 ${size}px ${CAP_FONT}`;
+    const w = ctx.measureText(text).width;
+    if (w <= maxW * 0.99 || size <= min) break;
+    size = Math.max(min, size * ((maxW * 0.98) / w));
+  }
+  ctx.font = `600 ${size}px ${CAP_FONT}`;
+  let t = text;
+  while (ctx.measureText(t).width > maxW * 1.12 && t.length > 1) t = t.slice(0, -1);
+  if (t !== text) t = t.slice(0, -1) + '…';
+  return { text: t, size };
+}
+
+function drawCaption(ctx, text, x, y, w, h, color = '#fff') {
+  const maxW = w - h * 0.6;
+  const { text: t, size } = layoutCaption(ctx, text, maxW, h * 0.5, h * 0.12);
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t, x + w / 2, y + h / 2, maxW);     // maxWidth: squeezes a hair if the measurement was a little off, instead of cutting text
+  return { text: t, size };
+}
+
+function drawOverlayCaption(ctx, text, x, y, w, h, pos = 'br') {
+  const pad = h * 0.035;
+  const maxW = w * 0.92;
+  const { text: t, size } = layoutCaption(ctx, text, maxW, h * OVERLAY_RATIO, h * 0.03);
+  const top = pos === 'tr';
+  const ty = top ? y + pad : y + h - pad;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = top ? 'top' : 'alphabetic';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.2;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.strokeText(t, x + w - pad, ty, maxW);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(t, x + w - pad, ty, maxW);
+  return { text: t, size };
+}
+
 async function buildCollage() {
   const { rows, cols } = state;
-  const { cw, ch } = computeCellSize();
+  const { cw, ch, cap } = computeCellSize();
+  const rowH = ch + cap;
 
   const canvas = document.createElement('canvas');
   canvas.width = cw * cols;
-  canvas.height = ch * rows;
+  canvas.height = rowH * rows;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingQuality = 'high';
 
   const total = rows * cols;
+  const white = state.capTheme === 'white';
+  if (cap > 0) {
+    ctx.fillStyle = white ? '#fff' : '#000';
+    for (let i = 0; i < total; i++) ctx.fillRect((i % cols) * cw, Math.floor(i / cols) * rowH + ch, cw, cap);
+  }
   for (let i = 0; i < total; i++) {
     const item = state.items[i];
     if (!item) continue;
     setNote(`作成中… ${i + 1} / ${total}`);
-    const { img, url } = await decodeImage(item.srcBlob);
+    const { img, url } = await decodeImage(await getSource(item));
     try {
       const g = cropGeom({ w: img.naturalWidth, h: img.naturalHeight, zoom: item.zoom, fx: item.fx, fy: item.fy }, cw, ch);
-      ctx.drawImage(img, g.sx, g.sy, g.sw, g.sh, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch);
+      const x = (i % cols) * cw;
+      const y = Math.floor(i / cols) * rowH;
+      ctx.drawImage(img, g.sx, g.sy, g.sw, g.sh, x, y, cw, ch);
+      if (state.capOverlay && item.caption) drawOverlayCaption(ctx, item.caption, x, y, cw, ch, state.capOverlay);
+      if (cap > 0 && item.caption) drawCaption(ctx, item.caption, x, y + ch, cw, cap, white ? '#0a0a0a' : '#fff');
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -670,12 +1068,15 @@ document.querySelectorAll('.step').forEach((btn) => {
   });
 });
 
-el.pick.addEventListener('click', () => el.file.click());
+el.pick.addEventListener('click', () => { addStart = 0; el.file.click(); });
 el.clear.addEventListener('click', clearAll);
+el.shuffle.addEventListener('click', shuffleItems);
 el.file.addEventListener('change', () => {
   const files = Array.from(el.file.files);
   el.file.value = '';
-  addFiles(files);
+  const start = addStart;
+  addStart = 0;
+  addFiles(files, start);
 });
 el.fileOne.addEventListener('change', () => {
   const file = el.fileOne.files[0];
@@ -688,7 +1089,8 @@ el.close.addEventListener('click', () => { el.modal.hidden = true; });
 el.modal.addEventListener('click', (e) => { if (e.target === el.modal) el.modal.hidden = true; });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (editorOpen()) closeEditor();
+  if (captionOpen()) closeCaptionSheet();
+  else if (editorOpen()) closeEditor();
   else el.modal.hidden = true;
 });
 

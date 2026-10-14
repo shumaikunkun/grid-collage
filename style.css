@@ -51,20 +51,49 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .top {
   max-width: 560px;
   margin: 0 auto;
-  padding: 20px 20px 0;
+  padding: 24px 20px 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
 }
-.logo { width: 24px; height: 24px; flex: none; }
-.logo rect { stroke: none; }
-h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; }
+.mark { width: 42px; height: 42px; flex: none; color: var(--fg); }
+.mark rect { stroke: none; }
+h1 { flex: 1 1 auto; min-width: 0; margin: 0; line-height: 0; }
+.wordmark { display: block; width: 100%; max-width: 360px; height: auto; color: var(--fg); }
+.wordmark path { fill: currentColor; stroke: currentColor; stroke-width: 3.5; stroke-linejoin: miter; }
 
 /* ---------- sections ---------- */
 
 main { max-width: 560px; margin: 0 auto; padding: 0 20px; }
 .sec { padding-top: 30px; }
 h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+
+.secHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.secHead h2 { margin: 0; }
+.chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--surface);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.08s, opacity 0.15s;
+}
+.chip svg { width: 16px; height: 16px; }
+.chip:active:not(:disabled) { transform: scale(0.96); }
+.chip:disabled { opacity: 0.3; cursor: default; }
+.chip:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+@keyframes cellIn { from { opacity: 0.15; } }
+#grid.shuffled .cell { animation: cellIn 0.35s ease-out; }
 
 /* ---------- controls ---------- */
 
@@ -226,8 +255,10 @@ h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em
   pointer-events: none;
   -webkit-user-drag: none;
 }
-.cell.empty { cursor: pointer; outline: 1px dashed #d4d4d8; outline-offset: -3px; }
-.cell.empty::before, .cell.empty::after {
+.pic { position: relative; overflow: hidden; width: 100%; }
+.cell.empty { cursor: pointer; }
+.cell.empty .pic { outline: 1px dashed #d4d4d8; outline-offset: -3px; }
+.cell.empty .pic::before, .cell.empty .pic::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -239,7 +270,23 @@ h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em
   border-radius: 1px;
   transform: translateX(-50%);
 }
-.cell.empty::after { transform: translateX(-50%) rotate(90deg); }
+.cell.empty .pic::after { transform: translateX(-50%) rotate(90deg); }
+.cap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0 4px;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.cap.hint-empty { color: #6d6d72; font-weight: 500; }
 .cell.dragging { opacity: 0.3; }
 .cell.over { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px #000; }
 .cell.mismatch::after {
@@ -323,6 +370,8 @@ h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em
 .sheet::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 14px; background: var(--surface-2); border-radius: 2px; }
 .sheetTitle { margin: 0 0 14px; text-align: center; font-size: 16px; font-weight: 700; }
 .sheet .actions { margin-top: 10px; }
+#editor .actions > .btn { flex: 1; padding: 0 8px; white-space: nowrap; }
+#editor .actions > .btn.danger { flex: 0 0 auto; padding: 0 18px; color: var(--danger); }
 .hint { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
 
 @keyframes fade { from { opacity: 0; } }
@@ -386,3 +435,65 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; background: #fff; border: 0; border-radius: 50%; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
 input[type="range"]:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- caption toggle / sheet ---------- */
+
+.capField { margin-top: 16px; }
+
+.textfield {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 16px;
+  color: #fff;
+  background: #000;
+  border: 1.5px solid var(--surface-2);
+  border-radius: var(--radius);
+  outline: none;
+}
+.textfield::placeholder { color: #8a8a90; }
+.textfield:focus { border-color: var(--fg); }
+.btn.danger { color: var(--danger); }
+
+/* caption sheet: header with the photo being edited, 3 buttons, lifted above the on-screen keyboard */
+#capSheet { padding-bottom: var(--kb, 0px); }
+.capHead { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.capHead .sheetTitle { margin: 0; text-align: left; }
+.capPos { margin: 2px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.capThumb { position: relative; flex: none; overflow: hidden; border-radius: 6px; background: var(--surface-2); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1); }
+.capThumb img { position: absolute; left: 0; top: 0; display: block; max-width: none; transform-origin: 0 0; }
+.actions.three > * { flex: 1; padding: 0 8px; white-space: nowrap; }
+.actions.three > .danger { flex: 0 0 auto; padding: 0 14px; }
+
+/* white caption bar */
+.cap.white { background: #fff; color: #0a0a0a; box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.08); }
+.cap.white.hint-empty { color: #a3a3a8; }
+#capSheet.cap-white .textfield { color: #0a0a0a; background: #fff; border-color: var(--surface-2); }
+#capSheet.cap-white .textfield::placeholder { color: #a3a3a8; }
+#capSheet.cap-white .textfield:focus { border-color: var(--fg); }
+
+/* small caption laid over the bottom-right corner of the picture */
+.tag {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  min-width: 55%;
+  max-width: 100%;
+  height: 32%;
+  padding: 0 4% 3% 0;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.95), 0 1px 3px rgba(0, 0, 0, 0.75);
+  cursor: text;
+}
+.tag.hint-empty { opacity: 0.55; font-weight: 500; }
+
+/* top-right variant of the overlay caption */
+.tag.top { top: 0; bottom: auto; align-items: flex-start; padding: 3% 4% 0 0; }

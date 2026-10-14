@@ -6,21 +6,28 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>グリッドコラージュ</title>
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="resources/icon.svg" type="image/svg+xml">
+<link rel="icon" href="resources/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="resources/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header class="top">
-  <svg class="logo" viewBox="0 0 352 352" aria-hidden="true">
-    <rect x="0" y="0" width="154" height="214" fill="currentColor"/>
-    <rect x="0" y="226" width="154" height="126" fill="currentColor" opacity=".3"/>
-    <rect x="166" y="0" width="186" height="122" fill="currentColor" opacity=".55"/>
-    <rect x="166" y="134" width="186" height="218" fill="currentColor"/>
+  <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+    <rect width="512" height="512" rx="112" fill="currentColor"/>
+    <rect x="161.5" y="60" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="263" y="60" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="364.5" y="60" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="60" y="161.5" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="60" y="263" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="263" y="263" width="87.5" height="87.5" rx="18" fill="var(--bg)" opacity=".6"/>
+    <rect x="364.5" y="263" width="87.5" height="87.5" rx="18" fill="var(--bg)" opacity=".6"/>
+    <rect x="161.5" y="364.5" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="263" y="364.5" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
+    <rect x="364.5" y="364.5" width="87.5" height="87.5" rx="18" fill="var(--bg)"/>
   </svg>
-  <h1>グリッドコラージュ</h1>
+  <h1><svg class="wordmark" viewBox="2.5 -57.04 1064.66 61.58" role="img" aria-label="Grid Collage"><path d="M6.25 -25.56L6.25 -26.94Q6.25 -33.91 7.23 -38.64Q8.2 -43.37 10.6 -46.35Q12.99 -49.32 17.11 -50.9Q21.24 -52.46 27.49 -53.03Q33.74 -53.59 42.53 -53.59L60.89 -53.59Q72.41 -53.59 79.61 -52.98Q86.82 -52.36 90.7 -50.62Q94.58 -48.87 96.04 -45.54Q97.51 -42.21 97.51 -36.81L88.13 -36.81Q88.13 -40.88 87.11 -43.15Q86.08 -45.42 83.25 -46.43Q80.42 -47.44 75.02 -47.68Q69.63 -47.92 60.89 -47.92L42.53 -47.92Q35.55 -47.92 30.76 -47.63Q25.98 -47.34 22.97 -46.3Q19.97 -45.26 18.38 -43Q16.8 -40.74 16.21 -36.85Q15.63 -32.95 15.63 -26.94L15.63 -25.56Q15.63 -19.75 16.21 -15.92Q16.8 -12.1 18.38 -9.81Q19.97 -7.52 22.97 -6.39Q25.98 -5.26 30.76 -4.92Q35.55 -4.58 42.53 -4.58L64.16 -4.58Q72.22 -4.58 77.15 -5.04Q82.08 -5.5 84.64 -7.02Q87.21 -8.55 88.09 -11.67Q88.96 -14.8 88.96 -20.13L88.96 -22.15L53.08 -22.15L53.08 -27.62L98.34 -27.62L98.34 -20.13Q98.34 -13.47 96.73 -9.3Q95.12 -5.12 91.28 -2.86Q87.45 -0.58 80.83 0.26Q74.22 1.09 64.16 1.09L42.53 1.09Q31.54 1.09 24.46 0.05Q17.38 -0.99 13.4 -3.79Q9.42 -6.59 7.84 -11.86Q6.25 -17.12 6.25 -25.56M117.87 0L117.87 -52.5L168.06 -52.5Q179.05 -52.5 185.76 -51.81Q192.48 -51.13 195.95 -49.45Q199.41 -47.78 200.63 -44.88Q201.85 -41.97 201.85 -37.53L201.85 -36.16Q201.85 -32.06 200.46 -29.11Q199.07 -26.14 195.12 -24.32Q191.16 -22.49 183.4 -21.73L199.71 0L190.33 0L174.36 -21.26Q173.39 -21.22 172.34 -21.22Q171.29 -21.22 170.16 -21.22L127.24 -21.22L127.24 0L117.87 0M127.24 -46.82L127.24 -26.9L168.7 -26.9Q177.05 -26.9 181.86 -27.29Q186.67 -27.68 188.94 -28.68Q191.21 -29.67 191.84 -31.48Q192.48 -33.29 192.48 -36.16L192.48 -37.53Q192.48 -40.77 191.6 -42.66Q190.72 -44.53 188.08 -45.42Q185.45 -46.31 180.22 -46.57Q175 -46.82 166.26 -46.82L127.24 -46.82M230.95 0L221.58 0L221.58 -52.5L230.95 -52.5L230.95 0M307.56 0L251.9 0L251.9 -52.5L307.56 -52.5Q318.55 -52.5 325.63 -51.58Q332.71 -50.65 336.69 -48.01Q340.67 -45.35 342.25 -40.3Q343.84 -35.24 343.84 -26.94L343.84 -25.56Q343.84 -17.54 342.25 -12.5Q340.67 -7.45 336.69 -4.73Q332.71 -2.02 325.63 -1.01Q318.55 0 307.56 0M261.27 -46.82L261.27 -5.68L307.56 -5.68Q316.3 -5.68 321.63 -6.26Q326.95 -6.84 329.73 -8.79Q332.51 -10.73 333.49 -14.73Q334.47 -18.73 334.47 -25.56L334.47 -26.94Q334.47 -32.61 333.88 -36.3Q333.29 -39.99 331.71 -42.13Q330.12 -44.26 327.12 -45.27Q324.12 -46.28 319.33 -46.55Q314.54 -46.82 307.56 -46.82L261.27 -46.82M388.76 -25.56L388.76 -26.94Q388.76 -33.91 389.74 -38.64Q390.71 -43.37 393.11 -46.35Q395.5 -49.32 399.62 -50.9Q403.75 -52.46 410 -53.03Q416.25 -53.59 425.04 -53.59L444.72 -53.59Q454.78 -53.59 461.68 -52.93Q468.59 -52.26 472.82 -50.29Q477.04 -48.33 478.95 -44.52Q480.85 -40.7 480.85 -34.42L471.47 -34.42Q471.47 -39.38 470.21 -42.13Q468.94 -44.88 465.93 -46.11Q462.93 -47.34 457.75 -47.63Q452.58 -47.92 444.72 -47.92L425.04 -47.92Q418.06 -47.92 413.27 -47.63Q408.49 -47.34 405.48 -46.3Q402.48 -45.26 400.89 -43Q399.31 -40.74 398.72 -36.85Q398.13 -32.95 398.13 -26.94L398.13 -25.56Q398.13 -19.75 398.72 -15.92Q399.31 -12.1 400.89 -9.81Q402.48 -7.52 405.48 -6.39Q408.49 -5.26 413.27 -4.92Q418.06 -4.58 425.04 -4.58L444.72 -4.58Q452.58 -4.58 457.75 -4.82Q462.93 -5.06 465.93 -6.22Q468.94 -7.38 470.21 -10.1Q471.47 -12.82 471.47 -17.74L480.85 -17.74Q480.85 -11.45 478.95 -7.69Q477.04 -3.93 472.82 -2.04Q468.59 -0.14 461.68 0.48Q454.78 1.09 444.72 1.09L425.04 1.09Q414.05 1.09 406.97 0.05Q399.89 -0.99 395.91 -3.79Q391.93 -6.59 390.35 -11.86Q388.76 -17.12 388.76 -25.56M551.45 1.09L531.78 1.09Q520.79 1.09 513.71 0.05Q506.63 -0.99 502.65 -3.79Q498.67 -6.59 497.08 -11.86Q495.5 -17.12 495.5 -25.56L495.5 -26.94Q495.5 -33.91 496.47 -38.64Q497.45 -43.37 499.84 -46.35Q502.23 -49.32 506.36 -50.9Q510.49 -52.46 516.74 -53.03Q522.99 -53.59 531.78 -53.59L551.45 -53.59Q560.24 -53.59 566.49 -53.03Q572.74 -52.46 576.87 -50.9Q580.99 -49.32 583.39 -46.35Q585.78 -43.37 586.76 -38.64Q587.73 -33.91 587.73 -26.94L587.73 -25.56Q587.73 -17.12 586.15 -11.86Q584.56 -6.59 580.58 -3.79Q576.6 -0.99 569.52 0.05Q562.44 1.09 551.45 1.09M531.78 -4.58L551.45 -4.58Q558.44 -4.58 563.22 -4.92Q568.01 -5.26 571.01 -6.39Q574.01 -7.52 575.6 -9.81Q577.19 -12.1 577.77 -15.92Q578.36 -19.75 578.36 -25.56L578.36 -26.94Q578.36 -32.95 577.77 -36.85Q577.19 -40.74 575.6 -43Q574.01 -45.26 571.01 -46.3Q568.01 -47.34 563.22 -47.63Q558.44 -47.92 551.45 -47.92L531.78 -47.92Q524.79 -47.92 520.01 -47.63Q515.22 -47.34 512.22 -46.3Q509.22 -45.26 507.63 -43Q506.04 -40.74 505.46 -36.85Q504.87 -32.95 504.87 -26.94L504.87 -25.56Q504.87 -19.75 505.46 -15.92Q506.04 -12.1 507.63 -9.81Q509.22 -7.52 512.22 -6.39Q515.22 -5.26 520.01 -4.92Q524.79 -4.58 531.78 -4.58M674.11 0L605.36 0L605.36 -52.5L614.73 -52.5L614.73 -5.47L674.11 -5.47L674.11 0M757.36 0L688.61 0L688.61 -52.5L697.98 -52.5L697.98 -5.47L757.36 -5.47L757.36 0M776.54 0L765.61 0L809.36 -52.5L821.86 -52.5L865.61 0L854.67 0L845.29 -12.03L785.92 -12.03L776.54 0M815.61 -48.12L790.61 -17.5L840.61 -17.5L815.61 -48.12M876.98 -25.56L876.98 -26.94Q876.98 -33.91 877.96 -38.64Q878.94 -43.37 881.33 -46.35Q883.72 -49.32 887.85 -50.9Q891.97 -52.46 898.22 -53.03Q904.47 -53.59 913.26 -53.59L931.62 -53.59Q943.14 -53.59 950.35 -52.98Q957.55 -52.36 961.43 -50.62Q965.31 -48.87 966.78 -45.54Q968.24 -42.21 968.24 -36.81L958.87 -36.81Q958.87 -40.88 957.84 -43.15Q956.82 -45.42 953.98 -46.43Q951.15 -47.44 945.76 -47.68Q940.36 -47.92 931.62 -47.92L913.26 -47.92Q906.28 -47.92 901.49 -47.63Q896.71 -47.34 893.71 -46.3Q890.7 -45.26 889.12 -43Q887.53 -40.74 886.94 -36.85Q886.36 -32.95 886.36 -26.94L886.36 -25.56Q886.36 -19.75 886.94 -15.92Q887.53 -12.1 889.12 -9.81Q890.7 -7.52 893.71 -6.39Q896.71 -5.26 901.49 -4.92Q906.28 -4.58 913.26 -4.58L934.89 -4.58Q942.95 -4.58 947.88 -5.04Q952.81 -5.5 955.38 -7.02Q957.94 -8.55 958.82 -11.67Q959.7 -14.8 959.7 -20.13L959.7 -22.15L923.81 -22.15L923.81 -27.62L969.07 -27.62L969.07 -20.13Q969.07 -13.47 967.46 -9.3Q965.85 -5.12 962.02 -2.86Q958.18 -0.58 951.57 0.26Q944.95 1.09 934.89 1.09L913.26 1.09Q902.28 1.09 895.2 0.05Q888.12 -0.99 884.14 -3.79Q880.16 -6.59 878.57 -11.86Q876.98 -17.12 876.98 -25.56M1063.41 0L988.41 0L988.41 -52.5L1062.04 -52.5L1062.04 -47.03L997.78 -47.03L997.78 -29.53L1059.35 -29.53L1059.35 -24.06L997.78 -24.06L997.78 -5.47L1063.41 -5.47"/></svg></h1>
 </header>
 
 <main>
@@ -92,6 +99,31 @@
         </div>
       </div>
     </div>
+    <div class="field capField">
+      <span class="label">各画像に文字を入れる</span>
+      <div class="seg" role="radiogroup" aria-label="各画像に文字を入れる">
+        <label>
+          <input type="radio" name="caption" value="none" checked>
+          <span>なし</span>
+        </label>
+        <label>
+          <input type="radio" name="caption" value="black">
+          <span>黒背景</span>
+        </label>
+        <label>
+          <input type="radio" name="caption" value="white">
+          <span>白背景</span>
+        </label>
+        <label>
+          <input type="radio" name="caption" value="br">
+          <span>右下</span>
+        </label>
+        <label>
+          <input type="radio" name="caption" value="tr">
+          <span>右上</span>
+        </label>
+      </div>
+    </div>
     <p class="total">合計 <strong id="total">9</strong> 枚<span class="dot">·</span>出力 <span id="outSize" class="num"></span></p>
   </section>
 
@@ -107,8 +139,8 @@
         クリア
       </button>
     </div>
-    <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
-    <input type="file" id="fileOne" accept="image/*,.heic,.heif" hidden>
+    <input type="file" id="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif" multiple hidden>
+    <input type="file" id="fileOne" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif" hidden>
     <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
     <p id="status" class="status" aria-live="polite"></p>
     <p id="warn" class="callout" aria-live="polite"></p>
@@ -116,11 +148,17 @@
   </section>
 
   <section class="sec" aria-labelledby="h-board">
-    <h2 id="h-board">プレビュー</h2>
+    <div class="secHead">
+      <h2 id="h-board">プレビュー</h2>
+      <button type="button" id="shuffle" class="chip" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.2c1.5 0 2.9.8 3.7 2l4.2 6c.8 1.2 2.2 2 3.7 2H21"/><path d="M3 17h3.2c1.5 0 2.9-.8 3.7-2M14.1 9c.8-1.2 2.2-2 3.7-2H21"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg>
+        シャッフル
+      </button>
+    </div>
     <div class="board">
       <div id="gridWrap"><div id="grid"></div></div>
     </div>
-    <p class="tips">タップで位置・大きさの調整と差し替え。ドラッグで入れ替え。空の枠をタップすると、その枠に追加できます。</p>
+    <p class="tips">タップで位置・大きさの調整と差し替え。ドラッグで入れ替え。空の枠をタップすると、その枠から順に追加できます。文字を入れる設定のときは、下の帯（「右下」「右上」のときは写真の右下／右上）をタップして入力します。</p>
   </section>
 </main>
 
@@ -146,8 +184,31 @@
     <div class="actions two">
       <button type="button" id="editReplace" class="btn">画像を差し替え</button>
       <button type="button" id="editReset" class="btn">リセット</button>
+      <button type="button" id="editClear" class="btn danger">クリア</button>
     </div>
     <button type="button" id="editDone" class="btn cta wide">完了</button>
+  </div>
+</div>
+
+<div id="capSheet" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="文字を入力">
+    <div class="capHead">
+      <div id="capThumb" class="capThumb" aria-hidden="true"></div>
+      <div>
+        <p class="sheetTitle">文字を入力</p>
+        <p id="capPos" class="capPos"></p>
+      </div>
+    </div>
+    <input type="text" id="capInput" class="textfield" maxlength="40" placeholder="この画像の下に入れる文字" enterkeyhint="done" autocomplete="off" autocapitalize="off">
+    <p class="hint">最大40文字。長い文字は自動で小さくなります。</p>
+    <div class="actions three">
+      <button type="button" id="capClear" class="btn danger">文字を消す</button>
+      <button type="button" id="capDone" class="btn">完了</button>
+      <button type="button" id="capNext" class="btn cta">
+        次へ
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
